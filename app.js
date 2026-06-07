@@ -1,4 +1,4 @@
-(function () {
+﻿(function () {
   const catalog = Array.isArray(window.RESOURCE_CATALOG) ? window.RESOURCE_CATALOG : [];
   const subjectsEl = document.querySelector("#subjects");
   const searchInput = document.querySelector("#searchInput");
@@ -7,18 +7,23 @@
   const subjectCount = document.querySelector("#subjectCount");
   const fileCount = document.querySelector("#fileCount");
   const openSubjects = new Set();
+  const track = window.trackSiteEvent || function () {};
+  let searchTimer = null;
   const subjectDescriptions = {
-    "C++": "C++ 课程试卷、期中资料与图片",
     "C与C++": "C/C++ 课程作业、源码、工程与编译结果",
-    "ODE": "常微分方程相关试卷与资料",
+    "初等数论": "初等数论试卷、答案与参考资料",
+    "复变函数": "复变函数课程试卷与复习资料",
     "实变函数": "实变函数课程试卷、回忆版与复习材料",
+    "常微分方程": "常微分方程相关试卷与资料",
     "抽象代数": "抽象代数课程试卷、答案与回忆资料",
     "数值分析一": "数值分析一代码、Notebook、作业与实验结果",
     "数学分析": "数学分析课程试卷与复习资料",
-    "数学建模": "数学建模案例、Notebook、代码与报告",
-    "数学模型SARS-SEIRD-Model": "SARS-SEIRD 数学模型项目资料",
+    "数学模型": "数学建模与数学模型案例、Notebook、代码与报告",
+    "普通物理上": "普通物理上课程讲义、试卷与复习资料",
+    "普通物理下": "普通物理下课程讲义、试卷与复习资料",
     "概率论": "概率论课程试卷、回忆版与文档",
-    "考试资料": "按课程整理的历年试卷、答案、讲义与补充材料"
+    "运筹学": "运筹学课程试卷与复习资料",
+    "高等代数": "高等代数试卷、答案与回忆资料"
   };
 
   function normalize(value) {
@@ -94,10 +99,27 @@
         <div class="file-path">${highlight(file.path, query)}</div>
       </div>
       <div class="file-actions">
-        <a class="action primary" href="${escapeHtml(href)}" target="_blank" rel="noopener">打开</a>
-        <a class="action" href="${escapeHtml(href)}" download="${escapeHtml(file.name)}">下载</a>
+        <a class="action primary" href="${escapeHtml(href)}" target="_blank" rel="noopener" data-action="open">打开</a>
+        <a class="action" href="${escapeHtml(href)}" download="${escapeHtml(file.name)}" data-action="download">下载</a>
       </div>
     `;
+
+    item.querySelector('[data-action="open"]').addEventListener("click", () => {
+      track("open_file", {
+        file: file.path,
+        name: file.name,
+        type: file.type
+      });
+    });
+
+    item.querySelector('[data-action="download"]').addEventListener("click", () => {
+      track("download_file", {
+        file: file.path,
+        name: file.name,
+        type: file.type
+      });
+    });
+
     return item;
   }
 
@@ -161,14 +183,27 @@
         if (normalizedQuery) {
           searchInput.value = "";
           openSubjects.add(subject.name);
+          track("expand_subject", {
+            subject: subject.name,
+            files: subject.files.length,
+            source: "search"
+          });
           render();
           return;
         }
 
         if (openSubjects.has(subject.name)) {
           openSubjects.delete(subject.name);
+          track("collapse_subject", {
+            subject: subject.name,
+            files: subject.files.length
+          });
         } else {
           openSubjects.add(subject.name);
+          track("expand_subject", {
+            subject: subject.name,
+            files: subject.files.length
+          });
         }
         render();
       });
@@ -182,12 +217,31 @@
     clearSearch.style.visibility = query ? "visible" : "hidden";
   }
 
-  searchInput.addEventListener("input", render);
+  searchInput.addEventListener("input", () => {
+    render();
+    window.clearTimeout(searchTimer);
+    const query = searchInput.value.trim();
+    if (!query) {
+      return;
+    }
+    searchTimer = window.setTimeout(() => {
+      track("search", {
+        query,
+        length: query.length
+      });
+    }, 700);
+  });
+
   clearSearch.addEventListener("click", () => {
     searchInput.value = "";
     searchInput.focus();
+    track("clear_search");
     render();
   });
 
+  track("catalog_loaded", {
+    subjects: catalog.length,
+    files: catalog.reduce((total, subject) => total + subject.files.length, 0)
+  });
   render();
 })();
